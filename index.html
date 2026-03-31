@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Cosmic V.30,9 - Radiant Star FLOR</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: #0ff; }
+        canvas { display: block; cursor: move; }
+        
+        #hud {
+            position: absolute; top: 20px; left: 20px; 
+            background: rgba(0, 10, 20, 0.9); padding: 18px; 
+            border: 1px solid #0ff; border-left: 4px solid #0ff;
+            pointer-events: none; z-index: 10;
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.3);
+            font-size: 11px; text-transform: uppercase;
+            width: 220px;
+        }
+        .hud-line { margin-bottom: 5px; display: flex; justify-content: space-between; gap: 20px; }
+        .hud-header { font-weight: bold; color: #fff; border-bottom: 1px solid #0ff; margin-bottom: 10px; padding-bottom: 5px; display: block; }
+        
+        #audio-time { color: #ff1493; font-weight: bold; }
+        .progress-container { width: 100%; height: 4px; background: rgba(255, 255, 255, 0.1); margin-top: 8px; border-radius: 2px; overflow: hidden; }
+        #progress-bar { width: 0%; height: 100%; background: #ff1493; box-shadow: 0 0 10px #ff1493; transition: width 0.1s linear; }
+
+        .scan-line { width: 100%; height: 2px; background: rgba(0, 255, 255, 0.3); position: relative; overflow: hidden; margin-top: 10px; }
+        .scan-bar { width: 30%; height: 100%; background: #0ff; position: absolute; animation: scan 2s infinite linear; }
+        @keyframes scan { 0% { left: -30%; } 100% { left: 100%; } }
+
+        #panel-datos {
+            position: absolute; top: 20px; right: -550px; width: 420px;
+            background: rgba(0, 5, 15, 0.95); border-left: 5px solid #ff1493;
+            padding: 25px; color: #fff; transition: 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            z-index: 20; box-shadow: -15px 0 40px rgba(0,0,0,0.9);
+            overflow-y: auto; max-height: 90vh;
+        }
+        #panel-datos.active { right: 20px; }
+        #p-nombre { margin:0; color:#ff1493; letter-spacing: 3px; text-transform: uppercase; border-bottom: 2px solid #ff1493; padding-bottom: 10px; text-shadow: 0 0 10px #ff1493; }
+        .frase-cancion { color: #fff; font-size: 18px; font-weight: bold; margin: 20px 0; text-align: center; line-height: 1.4; text-shadow: 0 0 12px #ff1493; background: rgba(255, 20, 147, 0.15); padding: 15px; border-radius: 8px; border: 1px dashed #ff1493; }
+        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .dato-box { background: rgba(0, 255, 255, 0.08); padding: 8px; border: 1px solid rgba(0, 255, 255, 0.2); border-radius: 4px; }
+        .dato-label { color: #0ff; font-size: 9px; text-transform: uppercase; }
+        .dato-val { color: #fff; font-size: 12px; margin-top: 2px; font-weight: bold; }
+        .descripcion-larga { margin-top: 20px; font-size: 13.5px; color: #e0e0e0; line-height: 1.6; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 4px; border-left: 3px solid #ff1493; }
+        button { background: #ff1493; color: #fff; border: none; padding: 12px; cursor: pointer; width: 100%; margin-top: 20px; font-weight: bold; text-transform: uppercase; }
+        #audio-prompt { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: #ff1493; color: #fff; padding: 15px 35px; border-radius: 40px; font-weight: bold; cursor: pointer; z-index: 100; box-shadow: 0 0 30px #ff1493; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.1); } }
+
+        #panel-lyrics {
+            position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+            width: 85%; max-width: 800px; background: rgba(0, 0, 0, 0.6);
+            padding: 25px; color: #fff; display: none; z-index: 30;
+            text-align: center; pointer-events: none; border-radius: 20px;
+        }
+        #panel-lyrics.active { display: block; }
+        .lyric-text { font-size: 28px; font-weight: bold; text-shadow: 0 0 20px #ff1493, 0 0 10px #000; transition: transform 0.1s ease-out; color: #fff; }
+        .btn-lyrics { box-shadow: 0 0 15px rgba(255,20,147,0.5); display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="audio-prompt" onclick="this.style.display='none'; iniciarAudio();">✨ INICIAR SESIÓN COSMOS ✨</div>
+
+    <div id="hud">
+        <span class="hud-header">vixt COSMOS MONITOR v3.5</span>
+        <div class="hud-line"><span>STATUS:</span> <span style="color:#0f0">CONNECTED</span></div>
+        <div class="hud-line"><span>TARGET:</span> <span id="track-name">SISTEMA COMPLETO</span></div>
+        <div class="hud-line"><span>AUDIO_LINK:</span> <span id="track-playing" style="color:#ff1493;">NINGUNA</span></div>
+        <div class="hud-line"><span>TIME:</span> <span id="audio-time">00:00 / 00:00</span></div>
+        <div class="progress-container"><div id="progress-bar"></div></div>
+        <div class="hud-line" style="margin-top:10px;"><span>COORDS:</span> <span>X:<span id="coord-x">0</span> Y:<span id="coord-y">0</span></span></div>
+        <div class="hud-line"><span>ZOOM_LVL:</span> <span id="zoom-val">100%</span></div>
+        <div class="hud-line"><span>ENTITIES:</span> <span id="ent-val">808</span></div>
+        <div class="scan-line"><div class="scan-bar"></div></div>
+    </div>
+
+    <div id="panel-datos">
+        <h2 id="p-nombre">PLANETA</h2>
+        <div id="p-frase-cancion" class="frase-cancion"></div>
+        <div class="data-grid">
+            <div class="dato-box"><div class="dato-label">> TIPO</div><div class="dato-val" id="val-tipo">---</div></div>
+            <div class="dato-box"><div class="dato-label">> TEMPERATURA</div><div class="dato-val" id="val-temp">---</div></div>
+            <div class="dato-box"><div class="dato-label">> RADIO</div><div class="dato-val" id="val-r">0</div></div>
+            <div class="dato-box"><div class="dato-label">> LUNAS</div><div class="dato-val" id="val-pop">0</div></div>
+        </div>
+        <div id="p-descripcion" class="descripcion-larga"></div>
+        <button class="btn-lyrics" id="btn-ver-letras" onclick="toggleLetras()">VER LETRAS SINCRONIZADAS</button>
+        <button onclick="cerrarPanel()">VOLVER AL COSMOS [X]</button>
+    </div>
+
+    <div id="panel-lyrics">
+        <div class="lyric-text" id="current-lyric">...</div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const panel = document.getElementById('panel-datos');
+const panelLyrics = document.getElementById('panel-lyrics');
+
+let width, height, time = 0;
+let zoomAct = 0.5, zoomObj = 0.5; 
+let rotX = 1.0, rotY = 0;
+let camX = 0, camY = 0;
+let isDragging = false, lastMouseX, lastMouseY, seleccionado = null;
+
+let audioCtx, analyser, dataArray, rhythmPulse = 0;
+let sourceNodes = new Map();
+let mostrandoLetras = false;
+
+// --- LETRAS SINCRONIZADAS ---
+const letrasTatan = [{ t: 0, txt: "..." }, { t: 42.54, txt: "Time changed, we're different" }, { t: 45.84, txt: "But my mind still says redundant things" }, { t: 49.31, txt: "Can I not think?" }, { t: 51.75, txt: "Will you love this part of me?" }, { t: 54.78, txt: "My lover is a day I can't forget" }, { t: 63.43, txt: "Furthering my distance from you" }, { t: 67.46, txt: "Realistically I can't leave now" }, { t: 71.15, txt: "But I'm okay as long as you" }, { t: 74.49, txt: "Keep me from going crazy" }, { t: 84.86, txt: "Straight up ahead you'll find a sign" }, { t: 89.87, txt: "That says you can't get by with a lie" }, { t: 110.88, txt: "How I feel about you" }, { t: 113.73, txt: "And those really dumb things people feel" }, { t: 116.80, txt: "I'll take the bumpy road, it'll probably break my legs" }, { t: 122.07, txt: "As long as I don't show you what's ruining my head" }, { t: 127.65, txt: "Funny thing about you is you read me pretty well" }, { t: 138.10, txt: "Annoying you with smoke signals, asking you for help" }, { t: 143.45, txt: "'Cause your immediate presence lifts me straight away from hell" }, { t: 149.01, txt: "Me and Mr. Heart, we say the cutest things about you" }, { t: 154.48, txt: "How you seem unreal and we'd probably die so quick without you" }, { t: 170.49, txt: "Time changed, we're different" }, { t: 173.87, txt: "But my mind still says redundant things" }, { t: 182.61, txt: "My lover is a day I can't forget" }, { t: 212.95, txt: "Family calls me crazy and my friends say I'm degenerate" }, { t: 217.85, txt: "But you tell me I'm so generous and my self-worth isn't hideous" }, { t: 234.52, txt: "Processing the information..." }, { t: 244.88, txt: "Feeling like a free ol' me..." }, { t: 255.60, txt: "Sick in the head for you and no cure has been discovered" }, { t: 271.27, txt: "And the beauty you've inflicted is always in its action" }, { t: 287.73, txt: "But I'm happy that you're happy, at least I do that much for you" }, { t: 298.45, txt: "Time changed, we're different" }, { t: 310.80, txt: "My lover is a day I can't forget" }, { t: 341.01, txt: "Time changed, we're different" }, { t: 353.69, txt: "My lover is a day I can't forget" }];
+const letrasAstro = [{ t: 0, txt: "..." }, { t: 8.04, txt: "I can see it in your eyes, that you wanna get out" }, { t: 12.01, txt: "I can see it in your eyes, that you need it right now" }, { t: 15.75, txt: "That you need it right now" }, { t: 17.78, txt: "That you wanna get out" }, { t: 19.83, txt: "That you need it right now" }, { t: 21.76, txt: "That you wanna get out" }, { t: 23.55, txt: "Yeah, I just wanna hear the sound" }, { t: 25.59, txt: "Drive our Camaros out of town" }, { t: 27.32, txt: "Baby, we could leave right now, woah" }, { t: 30.76, txt: "Yeah, I just wanna feel alive" }, { t: 33.68, txt: "Baby, take your time" }, { t: 35.55, txt: "Smokin' on this loud, woah" }, { t: 39.06, txt: "Girl, you know you make my cold heart warm with a touch" }, { t: 42.80, txt: "One kiss, then we fuckin', I just can't get enough" }, { t: 46.97, txt: "Put it on me, that's the best part, baby, the trust" }, { t: 50.73, txt: "Trust me, I got nothin' for you other than love" }, { t: 54.50, txt: "I remember eatin' pussy on the back of the bus" }, { t: 58.27, txt: "I remember gettin' nookie 'til the sun came up" }, { t: 62.35, txt: "All the places that you took me, no one came with us" }, { t: 66.22, txt: "Same hoes overlook me, now they on my nuts" }];
+const letrasFlor = [{ t: 0, txt: "..." }, { t: 2.01, txt: "Dance with me and I'll sing to you a symphony" }, { t: 9.84, txt: "Won't you kiss me? Shut me up please" }, { t: 16.71, txt: "She's a goddess" }, { t: 18.27, txt: "A wish from star in my heart, oh, yeah" }, { t: 29.06, txt: "Dance with me and I'll sing to you a symphony" }, { t: 37.08, txt: "Won't you kiss me? Shut me up please" }, { t: 42.67, txt: "Dance with me and I'll sing to you in my heart, oh, yeah" }, { t: 55.73, txt: "Yeah, and we can just dance in the moonlight" }, { t: 58.80, txt: "And these are the times that it feels right" }, { t: 61.03, txt: "And when I'm with you I do not hide" }, { t: 63.30, txt: "You're the light to the night, you're my moonlight" }, { t: 76.86, txt: "You're my weakness girl, you're my Kryptonite" }, { t: 83.49, txt: "Dance with me and I'll sing to you a symphony" }, { t: 91.37, txt: "Won't you kiss me? Shut me up please" }];
+const letrasLiam = [{ t: 0, txt: "..." }, { t: 38.19, txt: "Baby, I'm gonna do better for you because" }, { t: 49.62, txt: "I love you with my heart" }, { t: 57.27, txt: "Sunshine" }, { t: 59.75, txt: "Moonlight" }, { t: 61.34, txt: "My angel, darling, would you take my hand and my love?" }, { t: 76.50, txt: "I want to wake up next to you" }, { t: 86.17, txt: "Hold you in my arms forever too" }, { t: 95.17, txt: "ah ahhhhhhhh, ah ahhhhh..." }, { t: 114.98, txt: "Baby, I'm gonna do better for you because" }, { t: 126.30, txt: "I love you with my heart" }, { t: 134.14, txt: "Sunshine" }, { t: 136.51, txt: "Moonlight" }, { t: 138.13, txt: "My angel, darling, would you take my hand and my love?" }, { t: 153.14, txt: "Cariño, yo a ti te quiero" }, { t: 160.58, txt: "Oh, mi amor, no lo dudes por favor" }, { t: 172.58, txt: "Baby, I'm gonna do better for you because" }, { t: 184.09, txt: "I love you with my heart" }, { t: 191.66, txt: "Sunshine" }, { t: 193.89, txt: "Moonlight" }, { t: 195.62, txt: "My angel, darling, would you take my hand and my love?" }];
+const letrasGris = [{ t: 0, txt: "..." }, { t: 14.66, txt: "Dreaming of you when I'm alone" }, { t: 18.65, txt: "Baby, don't trip, I'm coming home" }, { t: 22.04, txt: "Kick it with me, I don't care if the sun is gone" }, { t: 29.40, txt: "Baby, don't cry when I am gone" }, { t: 33.17, txt: "Promise you're everything I want" }, { t: 36.72, txt: "This is for you, baby, listen, it's your song" }, { t: 43.57, txt: "Oye cariño, solo pienso en ti" }, { t: 47.63, txt: "When I wake up in the morning until I go back to sleep" }, { t: 51.08, txt: "How I wish you were mine, I think of you all the time" }, { t: 54.71, txt: "I always feel like I'm flying, baby, you make me feel fine" }, { t: 59.14, txt: "Lost in the words that you say to me" }, { t: 62.22, txt: "Y pasando tiempo juntos is the ultimate dream" }, { t: 65.91, txt: "I'm on the top of the world, baby girl, can't you see?" }, { t: 69.36, txt: "I found my perfect girl, I wanna make you my queen" }, { t: 73.26, txt: "Time and time again I can be feeling real sad" }, { t: 77.06, txt: "'Cause mi sueño no se ha hecho una realidad" }, { t: 80.81, txt: "Pero el tiempo dirá, el tiempo dirá" }, { t: 84.37, txt: "If we go spend our lives together en lo que el mundo gira" }, { t: 88.42, txt: "I promise I don't want nobody else to be around me but you" }, { t: 92.29, txt: "And nobody's touch and nobody's lips can make me feel like yours do" }, { t: 95.73, txt: "Our hands in a lock, nuestros labios se conocen" }, { t: 99.22, txt: "Nuestra noche es corta pero hermosa, we'll be okay" }, { t: 103.27, txt: "Dreaming of you when I'm alone" }, { t: 107.09, txt: "Baby, don't trip, I'm coming home" }, { t: 110.70, txt: "Kick it with me, I don't care if the sun is gone" }, { t: 118.11, txt: "Baby, don't cry when I am gone" }, { t: 121.82, txt: "Promise you're everything I want" }, { t: 125.62, txt: "This is for you, baby, listen, it's your song" }, { t: 132.20, txt: "Sin ti mis días son largos y se sienten tan amargos" }, { t: 136.29, txt: "Me ahogo en un lago de mis lágrimas que hago" }, { t: 139.86, txt: "Can't look forward to my future if it ain't including you" }, { t: 143.46, txt: "Promise that I'm gonna love you, it's about the time you knew" }, { t: 147.54, txt: "I swear I don't see nothing better than to lay here with you" }, { t: 150.91, txt: "And I hope you know I miss you, from my head I can't dismiss you" }, { t: 154.57, txt: "Eres lo que yo anhelaba en esta vida, que me falta" }, { t: 158.31, txt: "Lo que siento is surreal, I can't lie to you for real" }, { t: 162.22, txt: "Sabes bien que te quiero" }, { t: 169.04, txt: "And if you're down to spend your summer with me, just let me know" }, { t: 177.04, txt: "You know you're my sueño" }, { t: 184.41, txt: "You came to my life and now I feel alright" }, { t: 191.95, txt: "Dreaming of you when I'm alone" }, { t: 195.68, txt: "Baby, don't trip, I'm coming home" }, { t: 199.33, txt: "Kick it with me, I don't care if the sun is gone" }, { t: 206.66, txt: "Baby, don't cry when I am gone" }, { t: 210.45, txt: "Promise you're everything I want" }, { t: 214.19, txt: "This is for you, baby, listen, it's your song" }, { t: 221.62, txt: "Dreaming of you when I'm alone" }, { t: 225.36, txt: "Baby, don't trip, I'm coming home" }, { t: 228.77, txt: "Kick it with me, I don't care if the sun is gone" }, { t: 236.25, txt: "Baby, don't cry when I am gone" }, { t: 239.96, txt: "Promise you're everything I want" }, { t: 243.80, txt: "This is for you, baby, listen, it's your song" }];
+
+const letrasLili = [
+    { t: 0, txt: "..." },
+    { t: 29.78, txt: "Cuando veo esos ojos, ahí es donde quiero vivir" },
+    { t: 37.30, txt: "Si me besan eso labios, ay, así quiero morir" },
+    { t: 45.15, txt: "Mi canción de amor ahorita, cuando me dices te amo" },
+    { t: 53.05, txt: "Quiero ver esa sonrisa en mi cama al amanecer" },
+    { t: 62.05, txt: "Siempre en mi sueños vi una luz tan, tan bonita" },
+    { t: 69.75, txt: "Cantando pensamientos libres, siempre fue mi favorita" },
+    { t: 77.88, txt: "Ay, cómo me enamoré tan pesadamente" },
+    { t: 85.22, txt: "Tenía mil kilos rompiendo espina, pero no importa si estás presente" },
+    { t: 93.12, txt: "Unos cambios tomaron lugar en mi vida" },
+    { t: 100.83, txt: "Amorcito sonriente, entraste sin advertirme" },
+    { t: 108.28, txt: "Pero no importa ya, tenemos nuevas historias que contar" },
+    { t: 116.03, txt: "Amanecimos bien contentos, ahora vamos a dormirnos sin dudar" },
+    { t: 123.00, txt: "Cuando veo esos ojos, ahí es donde quiero vivir" },
+    { t: 130.82, txt: "Si me besan eso labios, ay, así quiero morir" },
+    { t: 138.93, txt: "Mi canción de amor ahorita, cuando me dices te amo" },
+    { t: 146.68, txt: "Quiero ver esa sonrisa en mi cama al amanecer" },
+    { t: 155.77, txt: "Profundo como el mar, es el hoyo de mi corazón" },
+    { t: 163.15, txt: "En tus manos está llenarme con pura alegría" },
+    { t: 170.79, txt: "Yo jamás iba pensar que mi existencia podría traer más" },
+    { t: 178.13, txt: "Yo nunca vi lo bueno de mi vida hasta que me enseñastes a volar" },
+    { t: 186.37, txt: "Siempre veía a los contentos y más que nada a los enamorados" },
+    { t: 194.16, txt: "Jamás pensé que un día me harías uno de ellos" },
+    { t: 201.95, txt: "Y ahora estamos aquí, tú y yo en la luna" },
+    { t: 209.33, txt: "Espero que todos algún día tengan mi fortuna" },
+    { t: 216.65, txt: "Cuando veo esos ojos, ahí es donde quiero vivir" },
+    { t: 224.64, txt: "Si me besan eso labios, ay, así quiero morir" },
+    { t: 232.30, txt: "Mi canción de amor ahorita, cuando me dices te amo" },
+    { t: 240.26, txt: "Quiero ver esa sonrisa en mi cama al amanecer" }
+];
+
+const estrellas = [];
+const cometasAmor = [];
+const explosiones = [];
+
+const planetas = [
+    { d: 0, r: 65, v: 0, col: '#ffcc00', nom: 'FLOR', lunas: 0, tipo: 'Supergigante Amarilla', temp: '5,500°C', pop: 'Infinita', rText: 'Radiante', desc: '"El corazón de este universo. Su luz es lo que mantiene la vida en cada rincón del universo. Sin ella, todo sería oscuridad en este universo solitario y frío..."', frase: '“You are the moonlight to my sunset...”', src: 'Shiloh Dynasty ft Fatboibari - Moonlight Shawty (Sub. Español).mp3' },
+    { d: 180, r: 12, v: 0.014, col: '#ff4d4d', nom: 'TATAN', lunas: 0, tipo: 'Volcánico', temp: '420°C', pop: '0', rText: '4,500 km', desc: '"Un mundo desprovisto de vida; el calor generado por FLOR hace imposible su nacimiento. Sin embargo, él se rehúsa a alejarse de ella."', frase: '“Lover is a day, if you give a chance I will stay...”', src: 'CUCO - Lover Is a Day (Audio).mp3' },
+    { d: 310, r: 16, v: 0.010, col: '#ff00ff', nom: 'LILI', lunas: 1, hasSmallRing: true, tipo: 'Cristalino', temp: '25°C', pop: '15k', rText: '6,300 km', desc: 'Hecho de diamantes pulverizados que brillan con cada rotación. Es el planeta más brillante después de FLOR.', frase: '“Tú eres mi amor de siempre...”', src: 'CUCO - Amor de Siempre (Official Audio).mp3' },
+    { d: 460, r: 22, v: 0.007, col: '#ff944d', nom: 'LIAM', lunas: 2, tipo: 'Gaseoso', temp: '-50°C', pop: '2.5k', rText: '9,000 km', desc: 'Sus tormentas de neón crean auroras permanentes. Un lugar donde las nubes parecen sueños pintados de naranja.', frase: '“I promise I’ll do better...”', src: 'Cuco - Do Better (Official Audio).mp3' },
+    { d: 580, r: 15, v: 0.006, col: '#8a2be2', nom: 'ASTRO vir', lunas: 1, tipo: 'Enigmático', temp: '-10°C', pop: '100k', rText: '5,800 km', desc: '"Oscuridad absoluta; viajeros estelares dicen que es el planeta con mejor vista al cielo por las noches. (Qué frío... y... solo...)."', frase: '“I can see it in your eyes...”', src: 'Lil Peep - nuts (feat. rainy bear) (Official Audio).mp3' },
+    { d: 700, r: 18, v: 0.005, col: '#cccccc', nom: 'Gris Nebular', lunas: 3, tipo: 'Glacial', temp: '-120°C', pop: '800k', rText: '8,100 km', desc: 'Bajo su gruesa capa de hielo gris, existen ciudades futuristas que funcionan con la energía de los espejos.', frase: '“Solo quiero estar contigo...”', src: 'cuco.mp3' },
+    { d: 920, r: 45, v: 0.003, col: '#00ccff', nom: 'Titán ', lunas: 4, rings: true, isGuardian: true, tipo: 'Gigante', temp: '-180°C', pop: '5k', rText: '18,900 km', desc: 'El protector del sistema. Sus anillos de agua congelada actúan como un escudo contra cualquier amenaza externa, el solo quiere ser amado...', frase: '“How did I find someone as perfect as you?”', src: 'CUCO - Lover Is a Day (Audio).mp3' },
+    { d: 1150, r: 30, v: 0.002, col: '#00ffff', nom: 'xi¨°a', lunas: 5, tipo: 'Oceánico', temp: '15°C', pop: '12M', rText: '12,600 km', desc: 'Un mundo cubierto totalmente por océanos de color cian neón. La vida aquí es pacífica y llena de luz subacuática. el planeta mas lejano y talvez el mas solitario....', frase: '“Siempre te encontraré...”', src: 'CUCO - Amor de Siempre (Official Audio).mp3' }
+];
+
+planetas.forEach(p => { p.audio = new Audio(p.src); p.audio.loop = true; });
+
+function iniciarAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.connect(audioCtx.destination);
+    }
+}
+
+function fmtTime(s) { if (isNaN(s)) return "00:00"; const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`; }
+
+function updateHUD() {
+    document.getElementById('coord-x').innerText = Math.round(camX);
+    document.getElementById('coord-y').innerText = Math.round(camY);
+    document.getElementById('zoom-val').innerText = Math.round(zoomAct * 100) + "%";
+    document.getElementById('ent-val').innerText = 800 + planetas.length + cometasAmor.length;
+    if (seleccionado && seleccionado.audio) {
+        const cur = seleccionado.audio.currentTime; const dur = seleccionado.audio.duration;
+        document.getElementById('audio-time').innerText = `${fmtTime(cur)} / ${fmtTime(dur)}`;
+        document.getElementById('progress-bar').style.width = (dur ? (cur / dur) * 100 : 0) + "%";
+        document.getElementById('progress-bar').style.backgroundColor = seleccionado.col;
+    } else { document.getElementById('audio-time').innerText = "00:00 / 00:00"; document.getElementById('progress-bar').style.width = "0%"; }
+}
+
+function toggleLetras() { mostrandoLetras = !mostrandoLetras; panelLyrics.classList.toggle('active', mostrandoLetras); }
+
+function crearCometaAmor() {
+    const colores = ['#ff2a00', '#ff00ff']; const color = colores[Math.floor(Math.random() * colores.length)];
+    const entradaX = (Math.random() - 0.5) * 5500; const entradaY = (Math.random() > 0.5 ? -3000 : 3000);
+    cometasAmor.push({ x: entradaX, y: entradaY, vx: (entradaX > 0 ? -1 : 1) * (5 + Math.random() * 3), vy: (entradaY > 0 ? -1 : 1) * (5 + Math.random() * 3), color: color, trail: [], life: 0, maxLife: 900, active: true });
+}
+
+function init() {
+    window.addEventListener('resize', resize); resize();
+    for(let i=0; i<800; i++) estrellas.push({ x: Math.random()*6000-3000, y: Math.random()*6000-3000, size: Math.random()*1.5, b: Math.random() });
+    setInterval(crearCometaAmor, 2200); setupInteractions(); draw(); 
+}
+
+function resize() { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; }
+
+function setupInteractions() {
+    canvas.addEventListener('mousedown', e => {
+        isDragging = true; lastMouseX = e.clientX; lastMouseY = e.clientY;
+        let hit = false;
+        planetas.forEach(p => { const d = Math.hypot(e.clientX - p.scrX, e.clientY - p.scrY); if (d < p.r * zoomAct + 25) { seleccionarPlaneta(p); hit = true; } });
+        if(!hit && !e.target.closest('#panel-datos')) cerrarPanel();
+    });
+    window.addEventListener('mousemove', e => { if (isDragging) { rotY += (e.clientX - lastMouseX) * 0.005; rotX = Math.max(0.1, Math.min(1.5, rotX + (e.clientY - lastMouseY) * 0.005)); lastMouseX = e.clientX; lastMouseY = e.clientY; } });
+    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('wheel', e => zoomObj = Math.max(0.03, Math.min(6, zoomObj - e.deltaY * 0.001)), {passive: true});
+}
+
+function seleccionarPlaneta(p) {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    planetas.forEach(pl => { pl.audio.pause(); pl.audio.currentTime = 0; });
+    if (audioCtx && !sourceNodes.has(p.nom)) { const source = audioCtx.createMediaElementSource(p.audio); source.connect(analyser); sourceNodes.set(p.nom, source); }
+    p.audio.play().catch(() => {});
+    seleccionado = p; zoomObj = p.d === 0 ? 0.35 : 1.5; 
+    document.getElementById('track-playing').innerText = p.src.split('.')[0].substring(0, 15) + "..."; 
+    document.getElementById('track-name').innerText = p.nom;
+    document.getElementById('p-nombre').innerText = p.nom;
+    document.getElementById('p-frase-cancion').innerText = p.frase;
+    document.getElementById('p-descripcion').innerText = p.desc;
+    document.getElementById('val-tipo').innerText = p.tipo;
+    document.getElementById('val-temp').innerText = p.temp;
+    document.getElementById('val-r').innerText = p.rText;
+    document.getElementById('val-pop').innerText = p.lunas;
+    // Lista de planetas habilitados para letras
+    const canHaveLyrics = (p.nom === "ASTRO UTS" || p.nom === "FLOR" || p.nom === "TATAN" || p.nom === "Titán UTS" || p.nom === "LIAM" || p.nom === "Gris Nebular" || p.nom === "LILI");
+    document.getElementById('btn-ver-letras').style.display = canHaveLyrics ? "block" : "none";
+    document.getElementById('btn-ver-letras').style.backgroundColor = p.col;
+    document.getElementById('current-lyric').style.textShadow = `0 0 20px ${p.col}`;
+    panel.classList.add('active');
+}
+
+function cerrarPanel() { panel.classList.remove('active'); panelLyrics.classList.remove('active'); mostrandoLetras = false; planetas.forEach(pl => pl.audio.pause()); document.getElementById('track-playing').innerText = "NINGUNA"; document.getElementById('track-name').innerText = "SISTEMA COMPLETO"; seleccionado = null; zoomObj = 0.5; }
+
+function draw() {
+    ctx.fillStyle = '#000008'; ctx.fillRect(0, 0, width, height);
+    time += 0.012; zoomAct += (zoomObj - zoomAct) * 0.06;
+    if (analyser && seleccionado) { analyser.getByteFrequencyData(dataArray); let sum = 0; for(let i = 0; i < 15; i++) sum += dataArray[i]; rhythmPulse = (sum / 15) / 255; } else { rhythmPulse = 0; }
+    if (mostrandoLetras && seleccionado) {
+        let letraSet = null;
+        if(seleccionado.nom === "ASTRO UTS") letraSet = letrasAstro;
+        if(seleccionado.nom === "FLOR") letraSet = letrasFlor;
+        if(seleccionado.nom === "TATAN" || seleccionado.nom === "Titán UTS") letraSet = letrasTatan;
+        if(seleccionado.nom === "LIAM") letraSet = letrasLiam;
+        if(seleccionado.nom === "Gris Nebular") letraSet = letrasGris;
+        if(seleccionado.nom === "LILI") letraSet = letrasLili; // Habilitar letras para Lili
+        if(letraSet) {
+            const cTime = seleccionado.audio.currentTime; const fraseActual = letraSet.findLast(l => cTime >= l.t);
+            if(fraseActual) { const el = document.getElementById('current-lyric'); el.innerText = fraseActual.txt; el.style.transform = `scale(${1 + rhythmPulse * 0.35})`; }
+        }
+    }
+    updateHUD();
+    let targetX = 0, targetY = 0;
+    if(seleccionado) { const ang = (time * seleccionado.v * 25) + planetas.indexOf(seleccionado)*2 + rotY; targetX = Math.cos(ang) * seleccionado.d; targetY = Math.sin(ang) * seleccionado.d * Math.sin(rotX); }
+    camX += (targetX - camX) * 0.08; camY += (targetY - camY) * 0.08;
+    ctx.save();
+    ctx.translate(width/2, height/2); ctx.scale(zoomAct, zoomAct); ctx.translate(-camX, -camY);
+    estrellas.forEach(e => { ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + Math.sin(time + e.b*15) * 0.5})`; ctx.beginPath(); ctx.arc(e.x, e.y, e.size, 0, Math.PI*2); ctx.fill(); });
+    const posPlanetas = planetas.map((p, i) => { const ang = (time * p.v * 25) + i*2 + rotY; return { x: Math.cos(ang) * p.d, y: Math.sin(ang) * p.d, r: p.r, col: p.col, isGuardian: p.isGuardian }; });
+    cometasAmor.forEach((c, idx) => {
+        if (!c.active) return;
+        posPlanetas.forEach(p => { const dist = Math.hypot(c.x - p.x, c.y - p.y); let fuerzaG = p.isGuardian ? 0.8 : 0.15; let radioAccion = p.isGuardian ? 400 : p.r * 5; if(dist < radioAccion) { c.vx += (p.x - c.x) / dist * fuerzaG; c.vy += (p.y - c.y) / dist * fuerzaG; } if (dist < p.r + 15) { c.active = false; explosiones.push({x: c.x, y: c.y * Math.sin(rotX), color: c.color, life: 1.0}); } });
+        c.x += c.vx; c.y += c.vy; const rY = c.y * Math.sin(rotX); c.trail.push({x: c.x, y: rY}); if (c.trail.length > 30) c.trail.shift();
+        c.trail.forEach((t, i) => { ctx.fillStyle = c.color + Math.floor((i/30)*255).toString(16).padStart(2, '0'); ctx.beginPath(); ctx.arc(t.x, t.y, (i/30)*4, 0, Math.PI*2); ctx.fill(); });
+        if(c.active) { ctx.shadowBlur = 10; ctx.shadowColor = c.color; ctx.fillStyle = c.color; ctx.font = 'bold 18px "Courier New"'; ctx.textAlign = "center"; ctx.fillText("TE AMO", c.x, rY - 20); ctx.shadowBlur = 0; }
+        if(c.life++ > c.maxLife || !c.active) cometasAmor.splice(idx, 1);
+    });
+    explosiones.forEach((exp, i) => { ctx.fillStyle = exp.color; ctx.beginPath(); ctx.arc(exp.x, exp.y, 50 * (1 - exp.life), 0, Math.PI*2); ctx.fill(); exp.life -= 0.05; if(exp.life <= 0) explosiones.splice(i, 1); });
+
+    planetas.forEach((p, i) => { if(i !== 0) { ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0,0, p.d, p.d*Math.sin(rotX), 0,0, Math.PI*2); ctx.stroke(); } });
+
+    const renderPlaneta = (p, i) => {
+        const ang = (time * p.v * 25) + i*2 + rotY;
+        const px = Math.cos(ang) * p.d; const py = Math.sin(ang) * p.d * Math.sin(rotX);
+        
+        const drawLunas = (atBack) => {
+            for(let l=0; l<p.lunas; l++){
+                const lang = (time * 0.7) + (l * (Math.PI * 2 / p.lunas));
+                const lY_rel = Math.sin(lang); 
+                if ((atBack && lY_rel < 0) || (!atBack && lY_rel >= 0)) {
+                    const lx = px + Math.cos(lang) * (p.r*2.8);
+                    const ly = py + lY_rel * (p.r*2.8) * Math.sin(rotX);
+                    ctx.fillStyle = "#fff"; ctx.shadowBlur = 10; ctx.shadowColor = "#fff";
+                    ctx.beginPath(); ctx.arc(lx, ly, 2.5, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+                }
+            }
+        };
+
+        const drawAnillos = (atBack) => {
+            if(!p.rings) return;
+            for(let r=0; r<3; r++) {
+                ctx.save(); ctx.translate(px, py);
+                ctx.strokeStyle = `rgba(0, 204, 255, ${0.4 - r*0.1})`; ctx.lineWidth = 4 - r;
+                ctx.beginPath();
+                const start = atBack ? Math.PI : 0;
+                const end = atBack ? Math.PI * 2 : Math.PI;
+                ctx.ellipse(0, 0, p.r * (1.8 + r*0.2), p.r * (0.6 + r*0.1) * Math.sin(rotX), 0, start, end);
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        drawLunas(true); drawAnillos(true);
+
+        let auraMult = (p.nom === "LILI") ? 3 : 1.5; let auraAlpha = (p.nom === "LILI") ? 'bb' : '44';
+        const auraGrad = ctx.createRadialGradient(px, py, p.r, px, py, p.r * auraMult); auraGrad.addColorStop(0, p.col + auraAlpha); auraGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = auraGrad; ctx.beginPath(); ctx.arc(px, py, p.r * auraMult, 0, Math.PI*2); ctx.fill();
+        const pGrad = ctx.createRadialGradient(px - p.r*0.3, py - p.r*0.3, p.r*0.1, px, py, p.r); pGrad.addColorStop(0, '#fff'); pGrad.addColorStop(0.2, p.col); pGrad.addColorStop(1, '#000');
+        ctx.fillStyle = pGrad; ctx.shadowBlur = (p.nom === "LILI") ? 50 : 15; ctx.shadowColor = p.col; ctx.beginPath(); ctx.arc(px, py, p.r, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+        
+        if (p === seleccionado) {
+            const auraLatido = p.r * (2 + rhythmPulse * 4); ctx.beginPath(); ctx.arc(px, py, auraLatido, 0, Math.PI * 2); ctx.fillStyle = `rgba(255, 20, 147, ${0.1 + rhythmPulse * 0.3})`; ctx.fill();
+            ctx.strokeStyle = `rgba(0, 255, 255, ${0.5 + rhythmPulse * 0.5})`; ctx.lineWidth = 2 + rhythmPulse * 3;
+            ctx.beginPath(); ctx.ellipse(px, py, p.r * 1.5 + rhythmPulse * 40, (p.r * 0.5 + rhythmPulse * 15) * Math.sin(rotX), 0, 0, Math.PI*2); ctx.stroke();
+        }
+
+        if(p.hasSmallRing) { ctx.save(); ctx.translate(px, py); ctx.rotate(time * 2); ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = '#ff00ff'; ctx.beginPath(); ctx.ellipse(0, 0, p.r * 1.6, p.r * 0.4 * Math.sin(rotX), 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+        
+        drawAnillos(false); drawLunas(false);
+        p.scrX = width/2 + (px - camX) * zoomAct; p.scrY = height/2 + (py - camY) * zoomAct;
+    };
+
+    planetas.forEach((p, i) => { if (p.nom === 'FLOR') return; const ang = (time * p.v * 25) + i*2 + rotY; const py = Math.sin(ang) * p.d * Math.sin(rotX); if (py < 0) renderPlaneta(p, i); });
+
+    const pulsoSol = 72 + Math.sin(time * 3) * 5; ctx.save();
+    const solGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, pulsoSol * 4); solGlow.addColorStop(0, 'rgba(255, 100, 0, 0.5)'); solGlow.addColorStop(0.6, 'rgba(255, 30, 0, 0.1)'); solGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = solGlow; ctx.beginPath(); ctx.arc(0, 0, pulsoSol * 4, 0, Math.PI*2); ctx.fill();
+    for (let i = 0; i < 5; i++) { const offset = (time * (1 + i * 0.2)) % 1; const radius = pulsoSol * (1 - offset); const alpha = offset * 0.6; ctx.strokeStyle = `rgba(255, 60, 0, ${alpha})`; ctx.lineWidth = 15; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke(); }
+    const solGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, pulsoSol); solGrad.addColorStop(0, '#ffffff'); solGrad.addColorStop(0.3, '#ffcc00'); solGrad.addColorStop(0.7, '#ff5500'); solGrad.addColorStop(1, '#992200'); 
+    ctx.shadowBlur = 80; ctx.shadowColor = '#ff6600'; ctx.fillStyle = solGrad; ctx.beginPath(); ctx.arc(0, 0, pulsoSol, 0, Math.PI*2); ctx.fill(); ctx.restore();
+    const pSol = planetas.find(p => p.nom === 'FLOR'); pSol.scrX = width/2 + (0 - camX) * zoomAct; pSol.scrY = height/2 + (0 - camY) * zoomAct;
+
+    planetas.forEach((p, i) => { if (p.nom === 'FLOR') return; const ang = (time * p.v * 25) + i*2 + rotY; const py = Math.sin(ang) * p.d * Math.sin(rotX); if (py >= 0) renderPlaneta(p, i); });
+
+    ctx.restore(); requestAnimationFrame(draw);
+}
+init();
+</script>
+</body>
+</html>
